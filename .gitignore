@@ -1,0 +1,9 @@
+__*
+.venv
+.vscode
+
+data/*
+!data/.gitkeep
+
+weights/*
+!weights/.gitkeep
