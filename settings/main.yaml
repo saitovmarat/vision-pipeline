@@ -1,7 +1,9 @@
 mode: "debug"
 
-rtsp_url: "rtsp://127.0.0.1:8554/live"
-source_path: "./data/video_2minutes.mp4"
+source:
+  rtsp_url: "rtsp://127.0.0.1:8554/live"
+  data_path: "./data/video_2minutes.mp4"
+
 
 model: "yolo"
 weights:

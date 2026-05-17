@@ -8,9 +8,9 @@ from core.postprocessor import Postprocessor
 
 def build_models(config):
     if config['mode'] == "debug":
-        data_source = DiskSource(config['source_path'])
+        data_source = DiskSource()
     else:
-        data_source = RTSPSource()
+        data_source = RTSPSource(url=config['source']['rtsp_url'])
         
     if config['model'] == "yolo":
         segmenter = YOLOSegmenter(config['weights']['yolo_weights'])

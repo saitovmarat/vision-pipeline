@@ -15,5 +15,5 @@ class IDataSource(ABC):
     def stop(self):
         raise NotImplementedError
     
-    def switch_source(self, new_path: str | Path):
+    def switch_source(self, new_source: str | Path):
         pass

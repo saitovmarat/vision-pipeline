@@ -8,17 +8,16 @@ IMAGE_EXTS = {'.jpg', '.jpeg', '.png'}
 
 
 class DiskSource(IDataSource):
-    def __init__(self, data_path: str | Path):
-        self.data_path = data_path
-        self.cap = None
+    def __init__(self):
+        self.data_path = None
         
         self.images = []
-        self.idx = 0
+        self._frame_idx = 0
         
         
-    def switch_source(self, new_path: str | Path):
+    def switch_source(self, new_source: str | Path):
         self.stop()
-        self.data_path = Path(new_path)
+        self.data_path = Path(new_source)
         self.start()
                 
     
@@ -33,15 +32,15 @@ class DiskSource(IDataSource):
         )
         if not self.images:
             raise ValueError(f"No Images in {images_dir}")
-        self.idx = 0
+        self._frame_idx = 0
 
     
     def get_frame_data(self) -> FramePacket | None:
-        if self.idx >= len(self.images):
+        if self._frame_idx >= len(self.images):
             return None
         
-        img_path = self.images[self.idx]
-        self.idx += 1
+        img_path = self.images[self._frame_idx]
+        self._frame_idx += 1
         
         frame = cv2.imread(str(img_path))
         if frame is None:
@@ -52,4 +51,4 @@ class DiskSource(IDataSource):
     
     def stop(self):
         self.images.clear()
-        self.idx = 0
+        self._frame_idx = 0
