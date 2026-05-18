@@ -4,6 +4,9 @@ from PySide6.QtWidgets import QApplication
 from core.factory import build_models
 from core.core_manager import CoreManager
 from core.debug_visualizer import DebugVisualizer
+import os
+
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
 
 
 def load_config(config_path: str) -> dict:
@@ -13,7 +16,7 @@ def load_config(config_path: str) -> dict:
 
 if __name__ == "__main__":
     config = load_config("./settings/main.yaml")
-    data_source, segmenter, metrics_calculator, postprocessor = build_models(config)
+    data_source, segmenter, metrics_calculator, postprocessor, network_sender = build_models(config)
     
     app = None
     visualizer = None
@@ -27,6 +30,7 @@ if __name__ == "__main__":
         segmenter=segmenter, 
         metrics_calculator=metrics_calculator,
         postprocessor=postprocessor,
+        network_sender=network_sender,
         visualizer=visualizer
     )
     
@@ -40,3 +44,8 @@ if __name__ == "__main__":
 
     else:        
         manager.start_processing()
+        try:
+            while manager.thread.is_alive():
+                manager.thread.join(timeout=1.0)
+        finally:
+            manager.stop_processing()
