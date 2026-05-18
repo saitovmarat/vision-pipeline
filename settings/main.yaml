@@ -1,8 +1,10 @@
 mode: "debug"
 
-source:
-  rtsp_url: "rtsp://127.0.0.1:8554/live"
-  data_path: "./data/video_2minutes.mp4"
+source: "rtsp://localhost:8554/live"
+
+network:
+  udp_ip: 127.0.0.1
+  udp_port: 5005
 
 
 model: "yolo"
