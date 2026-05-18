@@ -18,7 +18,6 @@ class DiskSource(IDataSource):
     def switch_source(self, new_source: str | Path):
         self.stop()
         self.data_path = Path(new_source)
-        self.start()
                 
     
     def start(self):

@@ -1,12 +1,13 @@
 from pathlib import Path
 import time
+import threading
 
 from core.data_source.base import IDataSource
 from core.segmentation.base import ISegmenter
 from core.metrics_calculator import MetricsCalculator
 from core.postprocessor import Postprocessor
+from core.network.udp_sender import UDPSender
 from core.debug_visualizer import DebugVisualizer
-import threading
 
 
 class CoreManager():
@@ -16,12 +17,14 @@ class CoreManager():
         segmenter: ISegmenter,
         metrics_calculator: MetricsCalculator, 
         postprocessor: Postprocessor,
+        network_sender: UDPSender,
         visualizer: DebugVisualizer
     ):
         self.data_source = data_source
         self.segmenter = segmenter
         self.metrics_calculator = metrics_calculator
         self.postprocessor = postprocessor
+        self.network_sender = network_sender 
         self.visualizer = visualizer
         
         self.frame_interval = 1.0 / config['fps'] 
@@ -42,6 +45,7 @@ class CoreManager():
         
     def start_processing(self):
         self.stop_event.clear()
+        self.data_source.start()
         self.thread = threading.Thread(target=self.worker_loop)
         self.thread.start()
         
@@ -54,11 +58,21 @@ class CoreManager():
         frame, frame_id = frame_data.frame, frame_data.frame_id
         
         results = self.segmenter.predict(frame)
-        metrics = self.metrics_calculator.update(results, frame_id)
-        frame = self.postprocessor.apply_mask_overlay(frame, results) 
-        
         if self.visualizer:
+            metrics = self.metrics_calculator.update(results, frame_id)
+            frame = self.postprocessor.apply_mask_overlay(frame, results) 
             self.visualizer.update_ready.emit(frame, metrics)
+            
+        packet = {
+            "objects": [
+                {
+                    "bbox": pred["bbox"].tolist(),
+                    "class_id": int(pred["class_id"]),
+                    "confidence": float(pred["confidence"]),}
+                for pred in results
+            ]
+        }
+        self.network_sender.send_dict(packet)
         return True        
         
     

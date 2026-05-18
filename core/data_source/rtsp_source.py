@@ -10,14 +10,12 @@ class RTSPSource(IDataSource):
     def __init__(self, url: str):
         self.url = url
         self.cap = None
-        
         self._frame_idx = 0
     
     
     def switch_source(self, new_source: str | Path):
         self.stop()
         self.url = new_source
-        self.start()
         
     
     def start(self): 
