@@ -32,11 +32,6 @@ class YOLOSegmenter(ISegmenter):
                     'fps': round(fps, 2),
                     'shape': image_shape
                 })
-        else:
-            predictions.append({
-                'fps': round(fps, 2),
-                'shape': image_shape
-            })
                 
         return predictions     
             
