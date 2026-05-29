@@ -2,31 +2,40 @@ from pathlib import Path
 import time
 import threading
 
-from core.data_source.base import IDataSource
-from core.segmentation.base import ISegmenter
+import cv2
+
+from core.data_source.data_manager import DataManager
+from core.segmentation.segmenter_manager import SegmenterManager
 from core.metrics_calculator import MetricsCalculator
 from core.postprocessor import Postprocessor
 from core.network.udp_sender import UDPSender
 from core.debug_visualizer import DebugVisualizer
+from core.preprocessor import Preprocessor
+
 
 
 class CoreManager():
     def __init__(self,
         config: dict,
-        data_source: IDataSource, 
-        segmenter: ISegmenter,
-        metrics_calculator: MetricsCalculator, 
-        postprocessor: Postprocessor,
-        network_sender: UDPSender,
         visualizer: DebugVisualizer
     ):
-        self.data_source = data_source
-        self.segmenter = segmenter
-        self.metrics_calculator = metrics_calculator
-        self.postprocessor = postprocessor
-        self.network_sender = network_sender 
+        self.data_source = DataManager(
+            mode=config['mode'],
+            source_url=config['source']
+        )
+        self.segmenter = SegmenterManager(
+            model=config['model'],
+            weights=config['weights']
+        )
+        self.metrics_calculator = MetricsCalculator()
+        self.postprocessor = Postprocessor()
+        self.network_sender = UDPSender(
+            ip=config['network']['udp_ip'],
+            port=config['network']['udp_port']
+        )
         self.visualizer = visualizer
         
+        self.preprocessor = Preprocessor()
         self.frame_interval = 1.0 / config['fps'] 
         
         self.thread = None
@@ -56,8 +65,11 @@ class CoreManager():
             return False
         
         frame, frame_id = frame_data.frame, frame_data.frame_id
+        filtered_frame = self.preprocessor.process(frame)
+        results = self.segmenter.predict(filtered_frame)
+        if results is None:
+            return True
         
-        results = self.segmenter.predict(frame)
         if self.visualizer:
             metrics = self.metrics_calculator.update(results, frame_id)
             frame = self.postprocessor.apply_mask_overlay(frame, results) 

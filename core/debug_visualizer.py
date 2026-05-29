@@ -50,18 +50,25 @@ class DebugVisualizer(QMainWindow, Ui_MainWindow):
             self.label.size(), Qt.AspectRatioMode.KeepAspectRatio
         ))
         
-        fps_text = f"FPS: {metrics.fps:.1f}"
-        if metrics.iou is not None:
-            iou_text = f" | IoU: {metrics.iou:.3f}"
-            if metrics.iou >= 0.7:
-                color = "#1FDD1F"
-            elif metrics.iou >= 0.4:
-                color = "#ff9800"
-            else:
-                color = "#f44336"
-        else:
-            iou_text = " | IoU: N/A"
+        if metrics is None:
+            fps_text = "FPS: --"
+            iou_text = " | IoU: --"
             color = "#aaaaaa"
+        else:
+            fps_text = f"FPS: {metrics.fps:.1f}"
+            if metrics.iou is not None:
+                iou_text = f" | IoU: {metrics.iou:.3f}"
+                if metrics.iou >= 0.7:
+                    color = "#1FDD1F"
+                elif metrics.iou >= 0.4:
+                    color = "#ff9800"
+                else:
+                    color = "#f44336"
+            else:
+                iou_text = " | IoU: --"
+                color = "#aaaaaa"
+        
+        
             
         self.metricsLabel.setText(f"{fps_text}{iou_text}")
         self.metricsLabel.setStyleSheet(f"color: {color};")

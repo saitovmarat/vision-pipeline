@@ -1,5 +1,4 @@
 from pathlib import Path
-
 import cv2
 import numpy as np
 
@@ -9,12 +8,17 @@ from core.domain.metrics import Metrics
 class MetricsCalculator:
     def __init__(self):
         self.labels_dir = None
-    
+        self.num_images = 0
+        
     
     def set_base_path(self, new_base_path: str | Path):
         self.labels_dir = Path(new_base_path, "labels") 
     
+    
     def update(self, results: list[dict],  frame_id: str) -> Metrics | None:
+        if not results:
+            return None
+        
         fps = results[0].get("fps", 0.0) if results else 0.0
         image_shape = results[0].get("shape")
         if image_shape is None:
@@ -45,7 +49,7 @@ class MetricsCalculator:
         intersection = np.logical_and(pred_combined, gt_mask).sum()
         union = np.logical_or(pred_combined, gt_mask).sum()
         iou = float(intersection / union) if union > 0 else 0.0
-
+        
         return Metrics(fps=fps, iou=iou)
                   
         

@@ -1,7 +1,6 @@
 import yaml
 import sys
 from PySide6.QtWidgets import QApplication
-from core.factory import build_models
 from core.core_manager import CoreManager
 from core.debug_visualizer import DebugVisualizer
 import os
@@ -16,7 +15,6 @@ def load_config(config_path: str) -> dict:
 
 if __name__ == "__main__":
     config = load_config("./settings/main.yaml")
-    data_source, segmenter, metrics_calculator, postprocessor, network_sender = build_models(config)
     
     app = None
     visualizer = None
@@ -26,11 +24,6 @@ if __name__ == "__main__":
         
     manager = CoreManager(
         config, 
-        data_source=data_source, 
-        segmenter=segmenter, 
-        metrics_calculator=metrics_calculator,
-        postprocessor=postprocessor,
-        network_sender=network_sender,
         visualizer=visualizer
     )
     

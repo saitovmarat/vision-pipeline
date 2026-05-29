@@ -9,6 +9,7 @@ class Postprocessor:
         self.mask_alpha = mask_alpha
         self.palette = np.random.RandomState(42).randint(0, 255, size=(256, 3), dtype=np.uint8)
 
+
     def apply_mask_overlay(self, frame: np.ndarray, predictions: List[Dict]) -> np.ndarray:
         if not predictions:
             return frame.copy()
