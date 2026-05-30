@@ -1,6 +1,7 @@
 from pathlib import Path
 import cv2
 import numpy as np
+import time
 from PySide6.QtWidgets import QMainWindow, QFileDialog
 from PySide6.QtGui import QIcon, QPixmap, QImage
 from PySide6.QtCore import Qt, Signal, Slot
@@ -11,7 +12,7 @@ from core.domain.metrics import Metrics
 
 class DebugVisualizer(QMainWindow, Ui_MainWindow):
     source_selected = Signal(str)
-    update_ready = Signal(np.ndarray, Metrics)
+    update_ready = Signal(np.ndarray, Metrics, float, float)
     
     def __init__(self):
         super().__init__()
@@ -37,8 +38,8 @@ class DebugVisualizer(QMainWindow, Ui_MainWindow):
         self.source_selected.emit(folder_path)
     
     
-    @Slot(np.ndarray, Metrics)
-    def handle_update(self, frame: np.ndarray, metrics: Metrics):
+    @Slot(np.ndarray, Metrics, float, float)
+    def handle_update(self, frame: np.ndarray, metrics: Metrics, filter_time: float, pred_time: float):
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb_frame.shape
         bytes_per_line = ch * w
@@ -47,28 +48,33 @@ class DebugVisualizer(QMainWindow, Ui_MainWindow):
         pixmap = QPixmap.fromImage(q_image)
         
         self.label.setPixmap(pixmap.scaled(
-            self.label.size(), Qt.AspectRatioMode.KeepAspectRatio
+            self.label.size(), 
+            Qt.AspectRatioMode.KeepAspectRatio, 
+            Qt.TransformationMode.SmoothTransformation
         ))
         
         if metrics is None:
-            fps_text = "FPS: --"
-            iou_text = " | IoU: --"
+            pred_fps_text = "Pred FPS: --"
+            filter_fps_text = " | Filter FPS: --"
+            map50_text = " | mAP@0.5: --"
+            map50_95_text = " | mAP@[0.5:0.95]: --"
             color = "#aaaaaa"
         else:
-            fps_text = f"FPS: {metrics.fps:.1f}"
-            if metrics.iou is not None:
-                iou_text = f" | IoU: {metrics.iou:.3f}"
-                if metrics.iou >= 0.7:
+            pred_fps_text = f"Pred FPS: {(1.0 / pred_time):.0f}"
+            filter_fps_text = f" | Filter FPS: {(1.0 / filter_time):.0f}"
+            if metrics.mAP50 is not None and metrics.mAP50_95 is not None:
+                map50_text = f" | mAP@0.5: {metrics.mAP50:.3f}"
+                map50_95_text = f" | mAP@[0.5:0.95]: {metrics.mAP50_95:.3f}"
+                if metrics.mAP50 >= 0.7:
                     color = "#1FDD1F"
-                elif metrics.iou >= 0.4:
+                elif metrics.mAP50 >= 0.4:
                     color = "#ff9800"
                 else:
                     color = "#f44336"
             else:
-                iou_text = " | IoU: --"
+                map50_text = " | mAP@0.5: --"
+                map50_95_text = " | mAP@[0.5:0.95]: --"
                 color = "#aaaaaa"
-        
-        
             
-        self.metricsLabel.setText(f"{fps_text}{iou_text}")
+        self.metricsLabel.setText(f"{pred_fps_text}{filter_fps_text}{map50_text}{map50_95_text}")
         self.metricsLabel.setStyleSheet(f"color: {color};")

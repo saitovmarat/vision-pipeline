@@ -32,6 +32,5 @@ class YOLOSegmenter(ISegmenter):
                     'fps': round(fps, 2),
                     'shape': image_shape
                 })
-                
         return predictions     
             

@@ -9,6 +9,6 @@ network:
 
 model: "yolo"
 weights:
-  yolo_weights: "./weights/best.pt"
+  yolo_weights: "./weights/overfitted_best.pt"
 
 fps: 10

@@ -1,92 +1,100 @@
 from pathlib import Path
 import cv2
 import numpy as np
-
+import torch
+from torchmetrics.detection import MeanAveragePrecision
 from core.domain.metrics import Metrics
 
 
+
 class MetricsCalculator:
-    def __init__(self):
+    def __init__(self, iou_thresholds=None, class_metrics=None):
         self.labels_dir = None
-        self.num_images = 0
         
-    
-    def set_base_path(self, new_base_path: str | Path):
-        self.labels_dir = Path(new_base_path, "labels") 
-    
-    
-    def update(self, results: list[dict],  frame_id: str) -> Metrics | None:
-        if not results:
-            return None
-        
-        fps = results[0].get("fps", 0.0) if results else 0.0
-        image_shape = results[0].get("shape")
-        if image_shape is None:
-            return None
-
-        gt_path = Path(self.labels_dir, f"{frame_id}.txt")
-        if not gt_path.exists():
-            return None
-        
-        gt_mask = self._load_yolo_mask(gt_path, image_shape)
-        if gt_mask is None:
-            return None
-        
-        pred_combined = np.zeros(image_shape, dtype=np.uint8)
-        
-        for pred in results:
-            mask = pred.get("mask")
-            if mask is None:
-                continue
+        if iou_thresholds is None:
+            self.iou_thresholds = torch.arange(0.5, 0.96, 0.05).tolist()
+        else:
+            self.iou_thresholds = list(iou_thresholds)
             
-            if mask.shape != image_shape:
-                mask = cv2.resize(
-                    mask, (image_shape[1], image_shape[0]), 
-                    interpolation=cv2.INTER_NEAREST
-                )
-            pred_combined = np.maximum(pred_combined, (mask > 0).astype(np.uint8))
-
-        intersection = np.logical_and(pred_combined, gt_mask).sum()
-        union = np.logical_or(pred_combined, gt_mask).sum()
-        iou = float(intersection / union) if union > 0 else 0.0
+        self.metric = MeanAveragePrecision(
+            box_format='xyxy',
+            iou_type='segm',
+            iou_thresholds=self.iou_thresholds,
+            class_metrics=class_metrics,
+            extended_summary=False
+        )
+    
+    
+    def switch_source(self, new_base_path: str | Path):
+        self.labels_dir = Path(new_base_path, "labels_swapped") 
+        self.metric.reset()
+    
+    
+    def _gt_to_torchmetrics_format(self, label_name: str, img_h: int, img_w: int):
+        gt_lines = Path(self.labels_dir, label_name + ".txt").read_text().strip().split("\n")
+        boxes, labels, masks = [], [], []
         
-        return Metrics(fps=fps, iou=iou)
-                  
-        
-    def _load_yolo_mask(self, path: Path, image_shape: tuple[int, int]) -> np.ndarray | None:
-        h, w = image_shape
-        mask = np.zeros((h, w), dtype=np.uint8)
-        
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    parts = line.strip().split()
-                    if len(parts) < 5:
-                        continue
-                    
-                    coords = list(map(float, parts[1:]))
-                    
-                    if len(coords) == 4:
-                        x_c, y_c, bw, bh = coords
-                        x1 = int((x_c - bw/2) * w)
-                        y1 = int((y_c - bh/2) * h)
-                        x2 = int((x_c + bw/2) * w)
-                        y2 = int((y_c + bh/2) * h)
-                        
-                        x1, x2 = max(0, x1), min(w, x2)
-                        y1, y2 = max(0, y1), min(h, y2)
-                        mask[y1:y2, x1:x2] = 1
-                        
-                    elif len(coords) >= 6 and len(coords) % 2 == 0:
-                        pts = np.array([
-                            [int(coords[i] * w), int(coords[i+1] * h)] 
-                            for i in range(0, len(coords), 2)
-                        ], dtype=np.int32)
-                        pts = pts.reshape((-1, 1, 2))
-                        cv2.fillPoly(mask, [pts], 1)
-                        
-        except Exception as e:
-            print(f"Error {path}: {e}")
-            return None
+        for line in gt_lines:
+            coords = list(map(float, line.strip().split()))
+            cls_id = int(coords[0])
+            labels.append(torch.tensor(cls_id, dtype=torch.int64))
             
-        return mask
+            pts = np.array(coords[1:], dtype=np.float32).reshape(-1, 2)
+            pts[:, 0] *= img_w
+            pts[:, 1] *= img_h
+            pts = np.round(pts).astype(np.int32)
+            
+            mask = np.zeros((img_h, img_w), dtype=np.uint8)
+            cv2.fillPoly(mask, [pts], 1)
+            masks.append(torch.from_numpy(mask).bool())
+            
+            x, y, bw, bh = cv2.boundingRect(pts)
+            boxes.append(torch.tensor([x, y, x + bw, y + bh], dtype=torch.float32))
+            
+        return [{
+            'boxes': torch.stack(boxes) if boxes else torch.empty(0, 4, dtype=torch.float32),
+            'labels': torch.stack(labels) if labels else torch.empty(0, dtype=torch.int64),
+            'masks': torch.stack(masks) if masks else torch.empty(0, img_h, img_w, dtype=torch.bool),
+        }]
+        
+        
+    @staticmethod 
+    def _preds_to_torchmetrics_format(preds: list[dict], img_h: int, img_w: int):
+        if not preds:
+            return [{
+                "boxes": torch.empty(0, 4, dtype=torch.float32),
+                "scores": torch.empty(0, dtype=torch.float32),
+                "labels": torch.empty(0, dtype=torch.int64),
+                "masks": torch.empty(0, img_h, img_w, dtype=torch.bool)
+            }]
+            
+        boxes = np.stack([p['bbox'] for p in preds])
+        scores = np.array([p['confidence'] for p in preds])
+        labels = np.array([p['class_id'] for p in preds])        
+        masks = np.stack([
+            cv2.resize(p['mask'], (img_w, img_h), interpolation=cv2.INTER_NEAREST)
+            for p in preds
+        ])
+        
+        return [{
+            "boxes": torch.from_numpy(boxes).float(),
+            "scores": torch.from_numpy(scores).float(),
+            "labels": torch.from_numpy(labels).long(),
+            "masks": torch.from_numpy(masks).bool()
+        }]
+        
+    
+    def update(self, predictions: list[dict], label_name: str, frame_shape: tuple):
+        h, w = frame_shape[:2]
+        preds = self._preds_to_torchmetrics_format(predictions, img_h=h, img_w=w)
+        target = self._gt_to_torchmetrics_format(label_name, img_h=h, img_w=w)
+        
+        self.metric.update(preds=preds, target=target)  
+    
+    
+    def compute(self):
+        metrics = self.metric.compute()
+        return Metrics(
+            mAP50=metrics['map_50'].item(), 
+            mAP50_95=metrics['map'].item()
+        )

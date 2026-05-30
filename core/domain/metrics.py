@@ -3,5 +3,5 @@ from dataclasses import dataclass
 
 @dataclass
 class Metrics:
-    iou: float
-    fps: float
+    mAP50: float
+    mAP50_95: float
